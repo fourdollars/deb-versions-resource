@@ -1,0 +1,164 @@
+#!/bin/bash
+
+set -euo pipefail
+
+exec 3>&1
+exec 1>&2
+jq -M -S . < /dev/stdin > /tmp/input.json
+
+if [ "$(jq -r '.source | has("mirror")' < /tmp/input.json)" = 'true' ]; then
+    mirror="$(jq -r .source.mirror < /tmp/input.json)"
+else
+    mirror='http://archive.ubuntu.com/ubuntu/'
+fi
+
+if [ "$(jq -r '.source | has("codename")' < /tmp/input.json)" = 'true' ]; then
+    codename="$(jq -r .source.codename < /tmp/input.json)"
+else
+    codename='focal'
+fi
+
+if command -v ubuntu-distro-info >/dev/null && [[ "$(ubuntu-distro-info --all)" =~ $codename ]]; then
+    distro=ubuntu
+else
+    distro=debian
+fi
+
+if [ "$(jq -r '.source | has("ppa")' < /tmp/input.json)" = 'true' ]; then
+    ppa="$(jq -r .source.ppa < /tmp/input.json)"
+else
+    ppa=''
+fi
+
+if [ "$(jq -r '.source | has("username")' < /tmp/input.json)" = 'true' ]; then
+    username="$(jq -r .source.username < /tmp/input.json)"
+else
+    username=''
+fi
+
+if [ "$(jq -r '.source | has("password")' < /tmp/input.json)" = 'true' ]; then
+    password="$(jq -r .source.password < /tmp/input.json)"
+else
+    password=''
+fi
+
+if [ "$(jq -r '.source | has("fingerprint")' < /tmp/input.json)" = 'true' ]; then
+    fingerprint="$(jq -r .source.fingerprint < /tmp/input.json)"
+else
+    fingerprint=''
+fi
+
+if [ "$(jq -r '.source | has("packages")' < /tmp/input.json)" = 'true' ]; then
+    mapfile -t packages < <(jq -r '.source.packages|.[]' < /tmp/input.json | sort)
+else
+    packages=()
+fi
+
+if [ "$(jq -r '.source | has("proposed")' < /tmp/input.json)" = 'true' ]; then
+    proposed="$(jq -r .source.proposed < /tmp/input.json)"
+else
+    proposed=''
+fi
+
+APTDIR="$(mktemp -d /tmp/apt.XXXXXXXXXX)"
+mkdir -p "$APTDIR"/var/lib/apt/lists "$APTDIR"/var/lib/dpkg "$APTDIR"/etc/apt/trusted.gpg.d "$APTDIR"/etc/apt/preferences.d "$APTDIR"/var/lib/dpkg "$APTDIR"/etc/apt/sources.list.d "$APTDIR"/etc/apt/auth.conf.d
+:> "$APTDIR"/var/lib/dpkg/status
+APTOPT=(-o "Dir=$APTDIR" -o "Dir::State::status=$APTDIR/var/lib/dpkg/status")
+
+if [ "$distro" = 'ubuntu' ] && [ -n "$proposed" ] && [ "$proposed" = 'true' ]; then
+    cat > "$APTDIR"/etc/apt/sources.list <<ENDLINE
+deb $mirror $codename main restricted universe multiverse
+deb $mirror $codename-updates main restricted universe multiverse
+deb $mirror $codename-backports main restricted universe multiverse
+deb $mirror $codename-proposed main restricted universe multiverse
+ENDLINE
+else
+    case "$distro" in
+        ('ubuntu')
+            cat > "$APTDIR"/etc/apt/sources.list <<ENDLINE
+deb $mirror $codename main restricted universe multiverse
+deb $mirror $codename-updates main restricted universe multiverse
+deb $mirror $codename-backports main restricted universe multiverse
+ENDLINE
+            ;;
+        ('debian')
+            cat > "$APTDIR"/etc/apt/sources.list <<ENDLINE
+deb $mirror $codename main contrib non-free
+deb $mirror $codename-updates main contrib non-free
+deb $mirror $codename-backports main contrib non-free
+ENDLINE
+            ;;
+    esac
+fi
+
+case "$distro" in
+    ('ubuntu')
+        cp /etc/apt/trusted.gpg.d/ubuntu-keyring-*-archive.gpg "$APTDIR/etc/apt/trusted.gpg.d"
+        ;;
+    ('debian')
+        cp /usr/share/keyrings/debian-archive-*.gpg /etc/apt/trusted.gpg.d
+        cp /usr/share/keyrings/debian-archive-*.gpg "$APTDIR/etc/apt/trusted.gpg.d"
+        ;;
+esac
+
+if [ -n "$fingerprint" ]; then
+    apt-key adv --keyserver keyserver.ubuntu.com --recv-key "$fingerprint"
+    apt-key adv --output "$APTDIR/etc/apt/trusted.gpg.d/$fingerprint.gpg" --export "$fingerprint"
+fi
+
+if [ -e /etc/apt/trusted.gpg ]; then
+    cp /etc/apt/trusted.gpg "$APTDIR/etc/apt"
+fi
+
+if [ -z "$ppa" ]; then
+    apt-get "${APTOPT[@]}" update
+elif [[ "$ppa" =~ ^ppa: ]]; then
+    GROUP=$(echo "${ppa//[:\/]/ }" | awk '{print $2}')
+    ARCHIVE=$(echo "${ppa//[:\/]/ }" | awk '{print $3}')
+    if [ -z "$username" ] || [ -z "$password" ] || [ -z "$fingerprint" ]; then
+        cat > "$APTDIR/etc/apt/sources.list.d/ppa-$GROUP-$ARCHIVE.list" <<ENDLINE
+deb https://ppa.launchpad.net/$GROUP/$ARCHIVE/ubuntu $codename main
+ENDLINE
+    else
+        cat > "$APTDIR/etc/apt/auth.conf.d/ppa-$GROUP-$ARCHIVE.conf" <<ENDLINE
+machine private-ppa.launchpad.net/$GROUP/$ARCHIVE/ubuntu login $username password $password
+ENDLINE
+        cat > "$APTDIR/etc/apt/sources.list.d/ppa-$GROUP-$ARCHIVE.list" <<ENDLINE
+deb https://private-ppa.launchpad.net/$GROUP/$ARCHIVE/ubuntu $codename main
+ENDLINE
+    fi
+    apt-get "${APTOPT[@]}" update
+else
+    cat > "$APTDIR/etc/apt/sources.list.d/ppa.list" <<ENDLINE
+$ppa
+ENDLINE
+    apt-get "${APTOPT[@]}" update
+fi
+
+versions=()
+sha256=()
+for pkg in "${packages[@]}"; do
+    apt-cache "${APTOPT[@]}" policy "$pkg"
+    versions+=("$(apt-cache "${APTOPT[@]}" show "$pkg" | grep ^Version: | head -n1 | awk '{print $2}' || true)")
+    sha256+=("$(apt-cache "${APTOPT[@]}" show "$pkg" | grep ^SHA256: | head -n1 | awk '{print $2}' || true)")
+done
+
+sha256sum="$(echo "${packages[@]}" "${versions[@]}" "${sha256[@]}" | sha256sum | awk '{print $1}')"
+
+case "$0" in
+    (/opt/resource/check)
+        json='[{"sha256":"'"$sha256sum"'"}]'
+        ;;
+    (*)
+        json='{"version":{"sha256":"'"$sha256sum"'"},"metadata":['
+        metadata=()
+        for idx in "${!packages[@]}"; do
+            metadata+=('{"name":"'"${packages[$idx]}"'","value":"'"${versions[$idx]}"'"}')
+            echo "${packages[$idx]} ${versions[$idx]} ${sha256[$idx]}" >> "$1/versions.log"
+        done
+        IFS=,
+        json+="${metadata[*]}"']}'
+        ;;
+esac
+
+jq -n "$json" >&3
