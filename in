@@ -117,7 +117,7 @@ elif [[ "$ppa" =~ ^ppa: ]]; then
     ARCHIVE=$(echo "${ppa//[:\/]/ }" | awk '{print $3}')
     if [ -z "$username" ] || [ -z "$password" ] || [ -z "$fingerprint" ]; then
         cat > "$APTDIR/etc/apt/sources.list.d/ppa-$GROUP-$ARCHIVE.list" <<ENDLINE
-deb https://ppa.launchpad.net/$GROUP/$ARCHIVE/ubuntu $codename main
+deb http://ppa.launchpad.net/$GROUP/$ARCHIVE/ubuntu $codename main
 ENDLINE
     else
         cat > "$APTDIR/etc/apt/auth.conf.d/ppa-$GROUP-$ARCHIVE.conf" <<ENDLINE
