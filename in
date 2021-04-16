@@ -54,6 +54,12 @@ else
     packages=()
 fi
 
+if [ "$(jq -r '.source | has("download")' < /tmp/input.json)" = 'true' ]; then
+    download="$(jq -r .source.download < /tmp/input.json)"
+else
+    download=''
+fi
+
 if [ "$(jq -r '.source | has("proposed")' < /tmp/input.json)" = 'true' ]; then
     proposed="$(jq -r .source.proposed < /tmp/input.json)"
 else
@@ -156,6 +162,11 @@ case "$0" in
             metadata+=('{"name":"'"${packages[$idx]}"'","value":"'"${versions[$idx]}"'"}')
             echo "${packages[$idx]} ${versions[$idx]} ${sha256[$idx]}" >> "$1/versions.log"
         done
+        if [ "$0" = /opt/resource/in ] && [ -n "$download" ] && [ "$download" = "true" ]; then
+            cd "$1"
+            apt-get "${APTOPT[@]}" download "${packages[@]}"
+            cd -
+        fi
         IFS=,
         json+="${metadata[*]}"']}'
         ;;
