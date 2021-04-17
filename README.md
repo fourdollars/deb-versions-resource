@@ -40,6 +40,7 @@ resource_types:
 ```yaml
 resources:
 - name: versions
+  icon: counter
   type: resource-deb-versions
   check_every: 30m
   source:
@@ -49,9 +50,8 @@ resources:
     fingerprint: EB4C1BFD4F042F6DDDCCEC917721F63BD38B4796
     download: true
     packages:
+      - firefox-esr
       - google-chrome-stable
-      - google-chrome-beta
-      - google-chrome-unstable
 ```
 
 ### Example
@@ -76,6 +76,7 @@ jobs:
         args:
         - -exc
         - |
-          cat versions/versions.log
-          ls versions/*.deb
+          cd versions
+          cat versions.log
+          ls -lh *
 ```

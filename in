@@ -6,50 +6,111 @@ exec 3>&1
 exec 1>&2
 jq -M -S . < /dev/stdin > /tmp/input.json
 
-if [ "$(jq -r '.source | has("mirror")' < /tmp/input.json)" = 'true' ]; then
-    mirror="$(jq -r .source.mirror < /tmp/input.json)"
-else
-    mirror='http://archive.ubuntu.com/ubuntu/'
-fi
-
 if [ "$(jq -r '.source | has("codename")' < /tmp/input.json)" = 'true' ]; then
     codename="$(jq -r .source.codename < /tmp/input.json)"
 else
-    codename='focal'
+    codename=''
 fi
 
-if command -v ubuntu-distro-info >/dev/null && [[ "$(ubuntu-distro-info --all)" =~ $codename ]]; then
-    distro=ubuntu
+if [ -z "$codename" ]; then
+    distro=''
+    mirror=''
+elif command -v ubuntu-distro-info >/dev/null && [[ "$(ubuntu-distro-info --all)" =~ $codename ]]; then
+    distro='ubuntu'
+    mirror='http://archive.ubuntu.com/ubuntu/'
+elif command -v debian-distro-info >/dev/null && [[ "$(debian-distro-info --all)" =~ $codename ]]; then
+    distro='debian'
+    mirror='http://deb.debian.org/debian/'
 else
-    distro=debian
+    distro=''
+    mirror=''
+fi
+
+if [ "$(jq -r '.source | has("mirror")' < /tmp/input.json)" = 'true' ]; then
+    mirror="$(jq -r .source.mirror < /tmp/input.json)"
 fi
 
 if [ "$(jq -r '.source | has("ppa")' < /tmp/input.json)" = 'true' ]; then
-    ppa="$(jq -r .source.ppa < /tmp/input.json)"
+    case "$(jq -r '.source.ppa | type' < /tmp/input.json)" in
+        ('string')
+            ppa=("$(jq -r .source.ppa < /tmp/input.json)")
+            ;;
+        ('array')
+            mapfile -t ppa < <(jq -r '.source.ppa | .[]' < /tmp/input.json)
+            ;;
+        (*)
+            echo "Invalid input for .source.ppa"
+            exit 1
+            ;;
+    esac
 else
-    ppa=''
+    ppa=()
 fi
 
 if [ "$(jq -r '.source | has("username")' < /tmp/input.json)" = 'true' ]; then
-    username="$(jq -r .source.username < /tmp/input.json)"
+    case "$(jq -r '.source.username | type' < /tmp/input.json)" in
+        ('string')
+            username=("$(jq -r .source.username < /tmp/input.json)")
+            ;;
+        ('array')
+            mapfile -t username < <(jq -r '.source.username | .[]' < /tmp/input.json)
+            ;;
+        (*)
+            echo "Invalid input for .source.username"
+            exit 1
+            ;;
+    esac
 else
-    username=''
+    username=()
 fi
 
 if [ "$(jq -r '.source | has("password")' < /tmp/input.json)" = 'true' ]; then
-    password="$(jq -r .source.password < /tmp/input.json)"
+    case "$(jq -r '.source.password | type' < /tmp/input.json)" in
+        ('string')
+            password=("$(jq -r .source.password < /tmp/input.json)")
+            ;;
+        ('array')
+            mapfile -t password < <(jq -r '.source.password | .[]' < /tmp/input.json)
+            ;;
+        (*)
+            echo "Invalid input for .source.password"
+            exit 1
+            ;;
+    esac
 else
-    password=''
+    password=()
 fi
 
 if [ "$(jq -r '.source | has("fingerprint")' < /tmp/input.json)" = 'true' ]; then
-    fingerprint="$(jq -r .source.fingerprint < /tmp/input.json)"
+    case "$(jq -r '.source.fingerprint | type' < /tmp/input.json)" in
+        ('string')
+            fingerprint=("$(jq -r .source.fingerprint < /tmp/input.json)")
+            ;;
+        ('array')
+            mapfile -t fingerprint < <(jq -r '.source.fingerprint | .[]' < /tmp/input.json)
+            ;;
+        (*)
+            echo "Invalid input for .source.fingerprint"
+            exit 1
+            ;;
+    esac
 else
-    fingerprint=''
+    fingerprint=()
 fi
 
 if [ "$(jq -r '.source | has("packages")' < /tmp/input.json)" = 'true' ]; then
-    mapfile -t packages < <(jq -r '.source.packages|.[]' < /tmp/input.json | sort)
+    case "$(jq -r '.source.packages | type' < /tmp/input.json)" in
+        ('string')
+            packages=("$(jq -r '.source.packages')")
+            ;;
+        ('array')
+            mapfile -t packages < <(jq -r '.source.packages|.[]' < /tmp/input.json | sort)
+            ;;
+        (*)
+            echo "Invalid input for .source.packages"
+            exit 1
+            ;;
+    esac
 else
     packages=()
 fi
@@ -63,7 +124,7 @@ fi
 if [ "$(jq -r '.source | has("proposed")' < /tmp/input.json)" = 'true' ]; then
     proposed="$(jq -r .source.proposed < /tmp/input.json)"
 else
-    proposed=''
+    proposed='false'
 fi
 
 APTDIR="$(mktemp -d /tmp/apt.XXXXXXXXXX)"
@@ -71,31 +132,28 @@ mkdir -p "$APTDIR"/var/lib/apt/lists "$APTDIR"/var/lib/dpkg "$APTDIR"/etc/apt/tr
 :> "$APTDIR"/var/lib/dpkg/status
 APTOPT=(-o "Dir=$APTDIR" -o "Dir::State::status=$APTDIR/var/lib/dpkg/status")
 
-if [ "$distro" = 'ubuntu' ] && [ -n "$proposed" ] && [ "$proposed" = 'true' ]; then
-    cat > "$APTDIR"/etc/apt/sources.list <<ENDLINE
-deb $mirror $codename main restricted universe multiverse
-deb $mirror $codename-updates main restricted universe multiverse
-deb $mirror $codename-backports main restricted universe multiverse
-deb $mirror $codename-proposed main restricted universe multiverse
-ENDLINE
-else
-    case "$distro" in
-        ('ubuntu')
-            cat > "$APTDIR"/etc/apt/sources.list <<ENDLINE
+case "$distro" in
+    ('ubuntu')
+        cat > "$APTDIR"/etc/apt/sources.list <<ENDLINE
 deb $mirror $codename main restricted universe multiverse
 deb $mirror $codename-updates main restricted universe multiverse
 deb $mirror $codename-backports main restricted universe multiverse
 ENDLINE
-            ;;
-        ('debian')
-            cat > "$APTDIR"/etc/apt/sources.list <<ENDLINE
+        if [ "$proposed" = 'true' ]; then
+            echo "deb $mirror $codename-proposed main restricted universe multiverse" >> "$APTDIR"/etc/apt/sources.list
+        fi
+        ;;
+    ('debian')
+        cat > "$APTDIR"/etc/apt/sources.list <<ENDLINE
 deb $mirror $codename main contrib non-free
 deb $mirror $codename-updates main contrib non-free
 deb $mirror $codename-backports main contrib non-free
 ENDLINE
-            ;;
-    esac
-fi
+        ;;
+    (*)
+        touch "$APTDIR"/etc/apt/sources.list
+        ;;
+esac
 
 case "$distro" in
     ('ubuntu')
@@ -107,39 +165,47 @@ case "$distro" in
         ;;
 esac
 
-if [ -n "$fingerprint" ]; then
-    apt-key adv --keyserver keyserver.ubuntu.com --recv-key "$fingerprint"
-    apt-key adv --output "$APTDIR/etc/apt/trusted.gpg.d/$fingerprint.gpg" --export "$fingerprint"
-fi
+export APT_KEY_DONT_WARN_ON_DANGEROUS_USAGE=1
+for key in "${fingerprint[@]}"; do
+    apt-key adv --keyserver keyserver.ubuntu.com --recv-key "$key" >/dev/null
+    apt-key adv --output "$APTDIR/etc/apt/trusted.gpg.d/$key.gpg" --export "$key" >/dev/null
+done
 
 if [ -e /etc/apt/trusted.gpg ]; then
     cp /etc/apt/trusted.gpg "$APTDIR/etc/apt"
 fi
 
-if [ -z "$ppa" ]; then
-    apt-get "${APTOPT[@]}" update
-elif [[ "$ppa" =~ ^ppa: ]]; then
-    GROUP=$(echo "${ppa//[:\/]/ }" | awk '{print $2}')
-    ARCHIVE=$(echo "${ppa//[:\/]/ }" | awk '{print $3}')
-    if [ -z "$username" ] || [ -z "$password" ] || [ -z "$fingerprint" ]; then
-        cat > "$APTDIR/etc/apt/sources.list.d/ppa-$GROUP-$ARCHIVE.list" <<ENDLINE
-deb http://ppa.launchpad.net/$GROUP/$ARCHIVE/ubuntu $codename main
+if [ -n "${ppa[*]}" ]; then
+    for i in "${!ppa[@]}"; do
+        if [[ "${ppa[$i]}" =~ ^ppa: ]]; then
+            if [ -z "$codename" ]; then
+                echo "You need to provide the codename when using ${ppa[$i]}."
+                exit 1
+            fi
+            group=$(echo "${ppa[$i]//[:\/]/ }" | awk '{print $2}')
+            archive=$(echo "${ppa[$i]//[:\/]/ }" | awk '{print $3}')
+            if [ -z "${username[$i]}" ] || [ -z "${password[$i]}" ] || [ -z "${fingerprint[$i]}" ]; then
+                cat > "$APTDIR/etc/apt/sources.list.d/ppa-$group-$archive.list" <<ENDLINE
+deb http://ppa.launchpad.net/$group/$archive/ubuntu $codename main
 ENDLINE
-    else
-        cat > "$APTDIR/etc/apt/auth.conf.d/ppa-$GROUP-$ARCHIVE.conf" <<ENDLINE
-machine private-ppa.launchpad.net/$GROUP/$ARCHIVE/ubuntu login $username password $password
+            else
+                cat > "$APTDIR/etc/apt/auth.conf.d/ppa-$group-$archive.conf" <<ENDLINE
+machine private-ppa.launchpad.net/$group/$archive/ubuntu login ${username[$i]} password ${password[$i]}
 ENDLINE
-        cat > "$APTDIR/etc/apt/sources.list.d/ppa-$GROUP-$ARCHIVE.list" <<ENDLINE
-deb https://private-ppa.launchpad.net/$GROUP/$ARCHIVE/ubuntu $codename main
+                cat > "$APTDIR/etc/apt/sources.list.d/ppa-$group-$archive.list" <<ENDLINE
+deb https://private-ppa.launchpad.net/$group/$archive/ubuntu $codename main
 ENDLINE
-    fi
-    apt-get "${APTOPT[@]}" update
-else
-    cat > "$APTDIR/etc/apt/sources.list.d/ppa.list" <<ENDLINE
-$ppa
-ENDLINE
-    apt-get "${APTOPT[@]}" update
+            fi
+        else
+            echo "${ppa[$i]}" >> "$APTDIR/etc/apt/sources.list.d/extra.list"
+            if [ -n "${username[*]}" ] && [ -n "${password[*]}" ] && [ -n "${username[$i]}" ] && [ -n "${password[$i]}" ]; then
+                echo "machine $(echo "${ppa[$i]}" | grep -o '[^ ]*://[^ ]*' | sed 's|^[^/]*//||') login ${username[$i]} password ${password[$i]}" >> "$APTDIR/etc/apt/auth.conf.d/extra.conf"
+            fi
+        fi
+    done
 fi
+
+apt-get "${APTOPT[@]}" -q -q update
 
 versions=()
 sha256=()
@@ -156,23 +222,27 @@ done
 sha256sum="$(echo "${packages[@]}" "${versions[@]}" "${sha256[@]}" | sha256sum | awk '{print $1}')"
 
 case "$0" in
-    (/opt/resource/check)
+    ('/opt/resource/check')
         json='[{"sha256":"'"$sha256sum"'"}]'
         ;;
-    (*)
+    ('/opt/resource/in')
         json='{"version":{"sha256":"'"$sha256sum"'"},"metadata":['
         metadata=()
         for idx in "${!packages[@]}"; do
             metadata+=('{"name":"'"${packages[$idx]}"'","value":"'"${versions[$idx]}"'"}')
             echo "${packages[$idx]} ${versions[$idx]} ${sha256[$idx]}" >> "$1/versions.log"
         done
-        if [ "$0" = /opt/resource/in ] && [ -n "$download" ] && [ "$download" = "true" ]; then
+        if [ -n "$download" ] && [ "$download" = "true" ]; then
             cd "$1"
             apt-get "${APTOPT[@]}" download "${packages[@]}"
             cd -
         fi
         IFS=,
         json+="${metadata[*]}"']}'
+        ;;
+    ('/opt/resource/out')
+        # Noop
+        json='{}'
         ;;
 esac
 
