@@ -144,7 +144,10 @@ fi
 versions=()
 sha256=()
 for pkg in "${packages[@]}"; do
-    apt-cache "${APTOPT[@]}" search ^"$pkg"$ | grep ^"$pkg"
+    if ! apt-cache "${APTOPT[@]}" search ^"$pkg"$ | grep ^"$pkg"; then
+        echo "$pkg not found."
+        exit 1
+    fi
     apt-cache "${APTOPT[@]}" policy "$pkg"
     versions+=("$(apt-cache "${APTOPT[@]}" show "$pkg" | grep ^Version: | head -n1 | awk '{print $2}' || true)")
     sha256+=("$(apt-cache "${APTOPT[@]}" show "$pkg" | grep ^SHA256: | head -n1 | awk '{print $2}' || true)")
