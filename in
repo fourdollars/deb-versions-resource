@@ -30,21 +30,21 @@ if [ "$(jq -r '.source | has("mirror")' < /tmp/input.json)" = 'true' ]; then
     mirror="$(jq -r .source.mirror < /tmp/input.json)"
 fi
 
-if [ "$(jq -r '.source | has("ppa")' < /tmp/input.json)" = 'true' ]; then
-    case "$(jq -r '.source.ppa | type' < /tmp/input.json)" in
+if [ "$(jq -r '.source | has("archive")' < /tmp/input.json)" = 'true' ]; then
+    case "$(jq -r '.source.archive | type' < /tmp/input.json)" in
         ('string')
-            ppa=("$(jq -r .source.ppa < /tmp/input.json)")
+            archive=("$(jq -r .source.archive < /tmp/input.json)")
             ;;
         ('array')
-            mapfile -t ppa < <(jq -r '.source.ppa | .[]' < /tmp/input.json)
+            mapfile -t archive < <(jq -r '.source.archive | .[]' < /tmp/input.json)
             ;;
         (*)
-            echo "Invalid input for .source.ppa"
+            echo "Invalid input for .source.archive"
             exit 1
             ;;
     esac
 else
-    ppa=()
+    archive=()
 fi
 
 if [ "$(jq -r '.source | has("username")' < /tmp/input.json)" = 'true' ]; then
@@ -175,31 +175,31 @@ if [ -e /etc/apt/trusted.gpg ]; then
     cp /etc/apt/trusted.gpg "$APTDIR/etc/apt"
 fi
 
-if [ -n "${ppa[*]}" ]; then
-    for i in "${!ppa[@]}"; do
-        if [[ "${ppa[$i]}" =~ ^ppa: ]]; then
+if [ -n "${archive[*]}" ]; then
+    for i in "${!archive[@]}"; do
+        if [[ "${archive[$i]}" =~ ^ppa: ]]; then
             if [ -z "$codename" ]; then
-                echo "You need to provide the codename when using ${ppa[$i]}."
+                echo "You need to provide the codename when using ${archive[$i]}."
                 exit 1
             fi
-            group=$(echo "${ppa[$i]//[:\/]/ }" | awk '{print $2}')
-            archive=$(echo "${ppa[$i]//[:\/]/ }" | awk '{print $3}')
+            user=$(echo "${archive[$i]//[:\/]/ }" | awk '{print $2}')
+            name=$(echo "${archive[$i]//[:\/]/ }" | awk '{print $3}')
             if [ -z "${username[$i]}" ] || [ -z "${password[$i]}" ] || [ -z "${fingerprint[$i]}" ]; then
-                cat > "$APTDIR/etc/apt/sources.list.d/ppa-$group-$archive.list" <<ENDLINE
-deb http://ppa.launchpad.net/$group/$archive/ubuntu $codename main
+                cat > "$APTDIR/etc/apt/sources.list.d/ppa-$user-$name.list" <<ENDLINE
+deb http://ppa.launchpad.net/$user/$name/ubuntu $codename main
 ENDLINE
             else
-                cat > "$APTDIR/etc/apt/auth.conf.d/ppa-$group-$archive.conf" <<ENDLINE
-machine private-ppa.launchpad.net/$group/$archive/ubuntu login ${username[$i]} password ${password[$i]}
+                cat > "$APTDIR/etc/apt/auth.conf.d/ppa-$user-$name.conf" <<ENDLINE
+machine private-ppa.launchpad.net/$user/$name/ubuntu login ${username[$i]} password ${password[$i]}
 ENDLINE
-                cat > "$APTDIR/etc/apt/sources.list.d/ppa-$group-$archive.list" <<ENDLINE
-deb https://private-ppa.launchpad.net/$group/$archive/ubuntu $codename main
+                cat > "$APTDIR/etc/apt/sources.list.d/ppa-$user-$name.list" <<ENDLINE
+deb https://private-ppa.launchpad.net/$user/$name/ubuntu $codename main
 ENDLINE
             fi
         else
-            echo "${ppa[$i]}" >> "$APTDIR/etc/apt/sources.list.d/extra.list"
+            echo "${archive[$i]}" >> "$APTDIR/etc/apt/sources.list.d/extra.list"
             if [ -n "${username[*]}" ] && [ -n "${password[*]}" ] && [ -n "${username[$i]}" ] && [ -n "${password[$i]}" ]; then
-                echo "machine $(echo "${ppa[$i]}" | grep -o '[^ ]*://[^ ]*' | sed 's|^[^/]*//||') login ${username[$i]} password ${password[$i]}" >> "$APTDIR/etc/apt/auth.conf.d/extra.conf"
+                echo "machine $(echo "${archive[$i]}" | grep -o '[^ ]*://[^ ]*' | sed 's|^[^/]*//||') login ${username[$i]} password ${password[$i]}" >> "$APTDIR/etc/apt/auth.conf.d/extra.conf"
             fi
         fi
     done
