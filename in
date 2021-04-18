@@ -193,7 +193,7 @@ if [ -n "${archive[*]}" ]; then
             fi
             user=$(echo "${archive[$i]//[:\/]/ }" | awk '{print $2}')
             name=$(echo "${archive[$i]//[:\/]/ }" | awk '{print $3}')
-            if [ -z "${username[$i]}" ] || [ -z "${password[$i]}" ] || [ -z "${fingerprint[$i]}" ]; then
+            if [ -z "${username[*]}" ] || [ -z "${password[*]}" ] || [ -z "${username[$i]}" ] || [ -z "${password[$i]}" ]; then
                 cat > "$APTDIR/etc/apt/sources.list.d/ppa-$user-$name.list" <<ENDLINE
 deb http://ppa.launchpad.net/$user/$name/ubuntu $codename main
 ENDLINE
