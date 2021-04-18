@@ -187,22 +187,27 @@ fi
 if [ -n "${archive[*]}" ]; then
     for i in "${!archive[@]}"; do
         if [[ "${archive[$i]}" =~ ^ppa: ]]; then
-            if [ -z "$codename" ]; then
-                echo "You need to provide the codename when using ${archive[$i]}."
+            ppa=$(echo "${archive[$i]}" | awk '{print $1}')
+            ppa_codename=$(echo "${archive[$i]}" | awk '{print $2}')
+            if [ -z "$ppa_codename" ]; then
+                ppa_codename="$codename"
+            fi
+            if [ -z "$ppa_codename" ]; then
+                echo "You need to provide the codename for ${ppa}."
                 exit 1
             fi
-            user=$(echo "${archive[$i]//[:\/]/ }" | awk '{print $2}')
-            name=$(echo "${archive[$i]//[:\/]/ }" | awk '{print $3}')
+            user=$(echo "${ppa//[:\/]/ }" | awk '{print $2}')
+            name=$(echo "${ppa//[:\/]/ }" | awk '{print $3}')
             if [ -z "${username[*]}" ] || [ -z "${password[*]}" ] || [ -z "${username[$i]}" ] || [ -z "${password[$i]}" ]; then
                 cat > "$APTDIR/etc/apt/sources.list.d/ppa-$user-$name.list" <<ENDLINE
-deb http://ppa.launchpad.net/$user/$name/ubuntu $codename main
+deb http://ppa.launchpad.net/$user/$name/ubuntu $ppa_codename main
 ENDLINE
             else
                 cat > "$APTDIR/etc/apt/auth.conf.d/ppa-$user-$name.conf" <<ENDLINE
 machine private-ppa.launchpad.net/$user/$name/ubuntu login ${username[$i]} password ${password[$i]}
 ENDLINE
                 cat > "$APTDIR/etc/apt/sources.list.d/ppa-$user-$name.list" <<ENDLINE
-deb https://private-ppa.launchpad.net/$user/$name/ubuntu $codename main
+deb https://private-ppa.launchpad.net/$user/$name/ubuntu $ppa_codename main
 ENDLINE
             fi
         else
