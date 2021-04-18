@@ -2,6 +2,16 @@
 
 set -euo pipefail
 
+APTDIR="$(mktemp -d /tmp/apt.XXXXXXXXXX)"
+
+clearup ()
+{
+    rm -f /tmp/input.json
+    rm -fr "$APTDIR"
+}
+
+trap clearup EXIT INT TERM
+
 exec 3>&1
 exec 1>&2
 jq -M -S . < /dev/stdin > /tmp/input.json
@@ -101,7 +111,7 @@ fi
 if [ "$(jq -r '.source | has("packages")' < /tmp/input.json)" = 'true' ]; then
     case "$(jq -r '.source.packages | type' < /tmp/input.json)" in
         ('string')
-            packages=("$(jq -r '.source.packages')")
+            packages=("$(jq -r '.source.packages' < /tmp/input.json)")
             ;;
         ('array')
             mapfile -t packages < <(jq -r '.source.packages|.[]' < /tmp/input.json | sort)
@@ -127,7 +137,6 @@ else
     proposed='false'
 fi
 
-APTDIR="$(mktemp -d /tmp/apt.XXXXXXXXXX)"
 mkdir -p "$APTDIR"/var/lib/apt/lists "$APTDIR"/var/lib/dpkg "$APTDIR"/etc/apt/trusted.gpg.d "$APTDIR"/etc/apt/preferences.d "$APTDIR"/var/lib/dpkg "$APTDIR"/etc/apt/sources.list.d "$APTDIR"/etc/apt/auth.conf.d
 :> "$APTDIR"/var/lib/dpkg/status
 APTOPT=(-o "Dir=$APTDIR" -o "Dir::State::status=$APTDIR/var/lib/dpkg/status")
