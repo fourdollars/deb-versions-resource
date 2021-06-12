@@ -176,6 +176,9 @@ esac
 
 export APT_KEY_DONT_WARN_ON_DANGEROUS_USAGE=1
 for key in "${fingerprint[@]}"; do
+    if [ -f "$APTDIR/etc/apt/trusted.gpg.d/$key.gpg" ]; then
+        continue
+    fi
     apt-key adv --keyserver keyserver.ubuntu.com --recv-key "$key" >/dev/null
     apt-key adv --output "$APTDIR/etc/apt/trusted.gpg.d/$key.gpg" --export "$key" >/dev/null
 done
