@@ -131,6 +131,12 @@ else
     download=''
 fi
 
+if [ "$(jq -r '.source | has("allow_not_found")' < /tmp/input.json)" = 'true' ]; then
+    allow_not_found="$(jq -r .source.allow_not_found < /tmp/input.json)"
+else
+    allow_not_found=''
+fi
+
 if [ "$(jq -r '.source | has("proposed")' < /tmp/input.json)" = 'true' ]; then
     proposed="$(jq -r .source.proposed < /tmp/input.json)"
 else
@@ -227,13 +233,22 @@ apt-get "${APTOPT[@]}" -q -q update
 versions=()
 sha256=()
 for pkg in "${packages[@]}"; do
+    not_found=''
     if ! apt-cache "${APTOPT[@]}" search ^"$pkg"$ | grep ^"$pkg"; then
         echo "$pkg not found."
-        exit 1
+        if [ -z "$allow_not_found" ] || [ "$allow_not_found" != "true" ]; then
+            exit 1
+        fi
+        not_found=1
     fi
-    apt-cache "${APTOPT[@]}" policy "$pkg"
-    versions+=("$(apt-cache "${APTOPT[@]}" show "$pkg" | grep ^Version: | head -n1 | awk '{print $2}' || true)")
-    sha256+=("$(apt-cache "${APTOPT[@]}" show "$pkg" | grep ^SHA256: | head -n1 | awk '{print $2}' || true)")
+    if [ -z "$not_found" ]; then
+        apt-cache "${APTOPT[@]}" policy "$pkg"
+        versions+=("$(apt-cache "${APTOPT[@]}" show "$pkg" | grep ^Version: | head -n1 | awk '{print $2}' || true)")
+        sha256+=("$(apt-cache "${APTOPT[@]}" show "$pkg" | grep ^SHA256: | head -n1 | awk '{print $2}' || true)")
+    else
+        versions+=("not found")
+        sha256+=("not found")
+    fi
 done
 
 sha256sum="$(echo "${packages[@]}" "${versions[@]}" "${sha256[@]}" | sha256sum | awk '{print $1}')"
@@ -251,7 +266,11 @@ case "$0" in
         done
         if [ -n "$download" ] && [ "$download" = "true" ]; then
             cd "$1"
-            apt-get "${APTOPT[@]}" download "${packages[@]}"
+            if [ -z "$allow_not_found" ] || [ "$allow_not_found" != "true" ]; then
+                apt-get "${APTOPT[@]}" download "${packages[@]}"
+            else
+                apt-get "${APTOPT[@]}" download "${packages[@]}" || true
+            fi
             cd -
         fi
         IFS=,

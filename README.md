@@ -36,6 +36,7 @@ resource_types:
 * password: optional, the password of the private PPA.
 * packages: **required**, the Debian binary packages.
 * download: optional, false by default.
+* allow_not_found: optional, false by default, allow any package not found
 
 ```yaml
 resources:
