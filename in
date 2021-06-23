@@ -243,7 +243,9 @@ for pkg in "${packages[@]}"; do
     fi
     if [ -z "$not_found" ]; then
         apt-cache "${APTOPT[@]}" policy "$pkg"
-        versions+=("$(apt-cache "${APTOPT[@]}" show "$pkg" | grep ^Version: | head -n1 | awk '{print $2}' || true)")
+        version="$(apt-cache "${APTOPT[@]}" show "$pkg" | grep ^Version: | head -n1 | awk '{print $2}' || true)"
+        apt-cache "${APTOPT[@]}" show "$pkg=$version"
+        versions+=("$version")
         sha256+=("$(apt-cache "${APTOPT[@]}" show "$pkg" | grep ^SHA256: | head -n1 | awk '{print $2}' || true)")
     else
         versions+=("not found")
