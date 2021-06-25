@@ -253,14 +253,14 @@ for pkg in "${packages[@]}"; do
     fi
 done
 
-sha256sum="$(echo "${packages[@]}" "${versions[@]}" "${sha256[@]}" | sha256sum | awk '{print $1}')"
+digest="sha256:$(echo "${packages[@]}" "${versions[@]}" "${sha256[@]}" | sha256sum | awk '{print $1}')"
 
 case "$0" in
     ('/opt/resource/check')
-        json='[{"sha256":"'"$sha256sum"'"}]'
+        json='[{"digest":"'"$digest"'"}]'
         ;;
     ('/opt/resource/in')
-        json='{"version":{"sha256":"'"$sha256sum"'"},"metadata":['
+        json='{"version":{"digest":"'"$digest"'"},"metadata":['
         metadata=()
         for idx in "${!packages[@]}"; do
             metadata+=('{"name":"'"${packages[$idx]}"'","value":"'"${versions[$idx]}"'"}')
