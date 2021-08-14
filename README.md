@@ -37,6 +37,7 @@ resource_types:
 * packages: **required**, the Debian binary packages.
 * download: optional, false by default.
 * allow_not_found: optional, false by default, allow any package not found
+* if_any_found: optional, false by default, if any package is found. This option will override allow_not_found.
 
 ```yaml
 resources:

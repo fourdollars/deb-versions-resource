@@ -16,11 +16,7 @@ exec 3>&1
 exec 1>&2
 jq -M -S . < /dev/stdin > /tmp/input.json
 
-if [ "$(jq -r '.source | has("codename")' < /tmp/input.json)" = 'true' ]; then
-    codename="$(jq -r .source.codename < /tmp/input.json)"
-else
-    codename=''
-fi
+codename="$(jq -r '.source.codename // ""' < /tmp/input.json)"
 
 if [ -z "$codename" ]; then
     distro=''
@@ -125,23 +121,10 @@ else
     packages=()
 fi
 
-if [ "$(jq -r '.source | has("download")' < /tmp/input.json)" = 'true' ]; then
-    download="$(jq -r .source.download < /tmp/input.json)"
-else
-    download=''
-fi
-
-if [ "$(jq -r '.source | has("allow_not_found")' < /tmp/input.json)" = 'true' ]; then
-    allow_not_found="$(jq -r .source.allow_not_found < /tmp/input.json)"
-else
-    allow_not_found=''
-fi
-
-if [ "$(jq -r '.source | has("proposed")' < /tmp/input.json)" = 'true' ]; then
-    proposed="$(jq -r .source.proposed < /tmp/input.json)"
-else
-    proposed='false'
-fi
+download="$(jq -r '.source.download // "false"' < /tmp/input.json)"
+allow_not_found="$(jq -r '.source.allow_not_found // "false"' < /tmp/input.json)"
+if_any_found="$(jq -r '.source.if_any_found // "false"' < /tmp/input.json)"
+proposed="$(jq -r '.source.proposed // "false"' < /tmp/input.json)"
 
 mkdir -p "$APTDIR"/var/lib/apt/lists "$APTDIR"/var/lib/dpkg "$APTDIR"/etc/apt/trusted.gpg.d "$APTDIR"/etc/apt/preferences.d "$APTDIR"/var/lib/dpkg "$APTDIR"/etc/apt/sources.list.d "$APTDIR"/etc/apt/auth.conf.d
 :> "$APTDIR"/var/lib/dpkg/status
@@ -230,28 +213,33 @@ fi
 
 apt-get "${APTOPT[@]}" -q -q update
 
+downloads=()
 versions=()
 sha256=()
 for pkg in "${packages[@]}"; do
-    not_found=''
     if ! apt-cache "${APTOPT[@]}" search ^"$pkg"$ | grep ^"$pkg"; then
-        echo "$pkg not found."
-        if [ -z "$allow_not_found" ] || [ "$allow_not_found" != "true" ]; then
+        echo "'$pkg' not found."
+        if [ "$if_any_found" = "true" ] || [ "$allow_not_found" = "true" ]; then
+            versions+=("not found")
+            sha256+=("not found")
+            continue
+        else
             exit 1
         fi
-        not_found=1
-    fi
-    if [ -z "$not_found" ]; then
-        apt-cache "${APTOPT[@]}" policy "$pkg"
-        version="$(apt-cache "${APTOPT[@]}" show "$pkg" | grep ^Version: | head -n1 | awk '{print $2}' || true)"
-        apt-cache "${APTOPT[@]}" show "$pkg=$version"
-        versions+=("$version")
-        sha256+=("$(apt-cache "${APTOPT[@]}" show "$pkg" | grep ^SHA256: | head -n1 | awk '{print $2}' || true)")
     else
-        versions+=("not found")
-        sha256+=("not found")
+        downloads+=("$pkg")
     fi
+    apt-cache "${APTOPT[@]}" policy "$pkg"
+    version="$(apt-cache "${APTOPT[@]}" show "$pkg" | grep ^Version: | head -n1 | awk '{print $2}' || true)"
+    apt-cache "${APTOPT[@]}" show "$pkg=$version"
+    versions+=("$version")
+    sha256+=("$(apt-cache "${APTOPT[@]}" show "$pkg" | grep ^SHA256: | head -n1 | awk '{print $2}' || true)")
 done
+
+if [ "$if_any_found" = "true" ] && [ -z "${downloads[*]}" ]; then
+    echo "None of the required packages is found."
+    exit 1
+fi
 
 digest="sha256:$(echo "${packages[@]}" "${versions[@]}" "${sha256[@]}" | sha256sum | awk '{print $1}')"
 
@@ -268,10 +256,10 @@ case "$0" in
         done
         if [ -n "$download" ] && [ "$download" = "true" ]; then
             cd "$1"
-            if [ -z "$allow_not_found" ] || [ "$allow_not_found" != "true" ]; then
-                apt-get "${APTOPT[@]}" download "${packages[@]}"
+            if [ "$if_any_found" = "true" ] || [ "$allow_not_found" = "true" ] && [ -n "${downloads[*]}" ]; then
+                apt-get "${APTOPT[@]}" download "${downloads[@]}"
             else
-                apt-get "${APTOPT[@]}" download "${packages[@]}" || true
+                apt-get "${APTOPT[@]}" download "${packages[@]}"
             fi
             cd -
         fi
