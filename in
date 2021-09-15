@@ -256,8 +256,12 @@ case "$0" in
         done
         if [ -n "$download" ] && [ "$download" = "true" ]; then
             cd "$1"
-            if [ "$if_any_found" = "true" ] || [ "$allow_not_found" = "true" ] && [ -n "${downloads[*]}" ]; then
+            if [ "$if_any_found" = "true" ]; then
                 apt-get "${APTOPT[@]}" download "${downloads[@]}"
+            elif [ "$allow_not_found" = "true" ]; then
+                if [ -n "${downloads[*]}" ]; then
+                    apt-get "${APTOPT[@]}" download "${downloads[@]}"
+                fi
             else
                 apt-get "${APTOPT[@]}" download "${packages[@]}"
             fi
