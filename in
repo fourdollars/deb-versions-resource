@@ -6,7 +6,6 @@ APTDIR="$(mktemp -d /tmp/apt.XXXXXXXXXX)"
 
 clearup ()
 {
-    rm -f /tmp/input.json
     rm -fr "$APTDIR"
 }
 
@@ -14,9 +13,10 @@ trap clearup EXIT INT TERM
 
 exec 3>&1
 exec 1>&2
-jq -M -S . < /dev/stdin > /tmp/input.json
 
-codename="$(jq -r '.source.codename // ""' < /tmp/input.json)"
+payload="$(cat <&0)"
+
+codename="$(jq -r '.source.codename // ""' <<< "$payload")"
 
 if [ -z "$codename" ]; then
     distro=''
@@ -32,17 +32,17 @@ else
     mirror=''
 fi
 
-if [ "$(jq -r '.source | has("mirror")' < /tmp/input.json)" = 'true' ]; then
-    mirror="$(jq -r .source.mirror < /tmp/input.json)"
+if [ "$(jq -r '.source | has("mirror")' <<< "$payload")" = 'true' ]; then
+    mirror="$(jq -r .source.mirror <<< "$payload")"
 fi
 
-if [ "$(jq -r '.source | has("archive")' < /tmp/input.json)" = 'true' ]; then
-    case "$(jq -r '.source.archive | type' < /tmp/input.json)" in
+if [ "$(jq -r '.source | has("archive")' <<< "$payload")" = 'true' ]; then
+    case "$(jq -r '.source.archive | type' <<< "$payload")" in
         ('string')
-            archive=("$(jq -r .source.archive < /tmp/input.json)")
+            archive=("$(jq -r .source.archive <<< "$payload")")
             ;;
         ('array')
-            mapfile -t archive < <(jq -r '.source.archive | .[]' < /tmp/input.json)
+            mapfile -t archive < <(jq -r '.source.archive | .[]' <<< "$payload")
             ;;
         (*)
             echo "Invalid input for .source.archive"
@@ -53,13 +53,13 @@ else
     archive=()
 fi
 
-if [ "$(jq -r '.source | has("username")' < /tmp/input.json)" = 'true' ]; then
-    case "$(jq -r '.source.username | type' < /tmp/input.json)" in
+if [ "$(jq -r '.source | has("username")' <<< "$payload")" = 'true' ]; then
+    case "$(jq -r '.source.username | type' <<< "$payload")" in
         ('string')
-            username=("$(jq -r .source.username < /tmp/input.json)")
+            username=("$(jq -r .source.username <<< "$payload")")
             ;;
         ('array')
-            mapfile -t username < <(jq -r '.source.username | .[]' < /tmp/input.json)
+            mapfile -t username < <(jq -r '.source.username | .[]' <<< "$payload")
             ;;
         (*)
             echo "Invalid input for .source.username"
@@ -70,13 +70,13 @@ else
     username=()
 fi
 
-if [ "$(jq -r '.source | has("password")' < /tmp/input.json)" = 'true' ]; then
-    case "$(jq -r '.source.password | type' < /tmp/input.json)" in
+if [ "$(jq -r '.source | has("password")' <<< "$payload")" = 'true' ]; then
+    case "$(jq -r '.source.password | type' <<< "$payload")" in
         ('string')
-            password=("$(jq -r .source.password < /tmp/input.json)")
+            password=("$(jq -r .source.password <<< "$payload")")
             ;;
         ('array')
-            mapfile -t password < <(jq -r '.source.password | .[]' < /tmp/input.json)
+            mapfile -t password < <(jq -r '.source.password | .[]' <<< "$payload")
             ;;
         (*)
             echo "Invalid input for .source.password"
@@ -87,13 +87,13 @@ else
     password=()
 fi
 
-if [ "$(jq -r '.source | has("fingerprint")' < /tmp/input.json)" = 'true' ]; then
-    case "$(jq -r '.source.fingerprint | type' < /tmp/input.json)" in
+if [ "$(jq -r '.source | has("fingerprint")' <<< "$payload")" = 'true' ]; then
+    case "$(jq -r '.source.fingerprint | type' <<< "$payload")" in
         ('string')
-            fingerprint=("$(jq -r .source.fingerprint < /tmp/input.json)")
+            fingerprint=("$(jq -r .source.fingerprint <<< "$payload")")
             ;;
         ('array')
-            mapfile -t fingerprint < <(jq -r '.source.fingerprint | .[]' < /tmp/input.json)
+            mapfile -t fingerprint < <(jq -r '.source.fingerprint | .[]' <<< "$payload")
             ;;
         (*)
             echo "Invalid input for .source.fingerprint"
@@ -104,13 +104,13 @@ else
     fingerprint=()
 fi
 
-if [ "$(jq -r '.source | has("packages")' < /tmp/input.json)" = 'true' ]; then
-    case "$(jq -r '.source.packages | type' < /tmp/input.json)" in
+if [ "$(jq -r '.source | has("packages")' <<< "$payload")" = 'true' ]; then
+    case "$(jq -r '.source.packages | type' <<< "$payload")" in
         ('string')
-            packages=("$(jq -r '.source.packages' < /tmp/input.json)")
+            packages=("$(jq -r '.source.packages' <<< "$payload")")
             ;;
         ('array')
-            mapfile -t packages < <(jq -r '.source.packages|.[]' < /tmp/input.json | sort)
+            mapfile -t packages < <(jq -r '.source.packages|.[]' <<< "$payload" | sort)
             ;;
         (*)
             echo "Invalid input for .source.packages"
@@ -121,10 +121,10 @@ else
     packages=()
 fi
 
-download="$(jq -r '.source.download // "false"' < /tmp/input.json)"
-allow_not_found="$(jq -r '.source.allow_not_found // "false"' < /tmp/input.json)"
-if_any_found="$(jq -r '.source.if_any_found // "false"' < /tmp/input.json)"
-proposed="$(jq -r '.source.proposed // "false"' < /tmp/input.json)"
+download="$(jq -r '.source.download // "false"' <<< "$payload")"
+allow_not_found="$(jq -r '.source.allow_not_found // "false"' <<< "$payload")"
+if_any_found="$(jq -r '.source.if_any_found // "false"' <<< "$payload")"
+proposed="$(jq -r '.source.proposed // "false"' <<< "$payload")"
 
 mkdir -p "$APTDIR"/var/lib/apt/lists "$APTDIR"/var/lib/dpkg "$APTDIR"/etc/apt/trusted.gpg.d "$APTDIR"/etc/apt/preferences.d "$APTDIR"/var/lib/dpkg "$APTDIR"/etc/apt/sources.list.d "$APTDIR"/etc/apt/auth.conf.d
 :> "$APTDIR"/var/lib/dpkg/status
