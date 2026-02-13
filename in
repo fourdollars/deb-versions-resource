@@ -47,13 +47,13 @@ fi
 
 if [ "$(jq -r '.source | has("archive")' <<< "$payload")" = 'true' ]; then
     case "$(jq -r '.source.archive | type' <<< "$payload")" in
-        ('string')
+        'string')
             archive=("$(jq -r .source.archive <<< "$payload")")
             ;;
-        ('array')
+        'array')
             mapfile -t archive < <(jq -r '.source.archive | .[]' <<< "$payload")
             ;;
-        (*)
+        *)
             echo "Invalid input for .source.archive"
             exit 1
             ;;
@@ -64,13 +64,13 @@ fi
 
 if [ "$(jq -r '.source | has("username")' <<< "$payload")" = 'true' ]; then
     case "$(jq -r '.source.username | type' <<< "$payload")" in
-        ('string')
+        'string')
             username=("$(jq -r .source.username <<< "$payload")")
             ;;
-        ('array')
+        'array')
             mapfile -t username < <(jq -r '.source.username | .[]' <<< "$payload")
             ;;
-        (*)
+        *)
             echo "Invalid input for .source.username"
             exit 1
             ;;
@@ -81,13 +81,13 @@ fi
 
 if [ "$(jq -r '.source | has("password")' <<< "$payload")" = 'true' ]; then
     case "$(jq -r '.source.password | type' <<< "$payload")" in
-        ('string')
+        'string')
             password=("$(jq -r .source.password <<< "$payload")")
             ;;
-        ('array')
+        'array')
             mapfile -t password < <(jq -r '.source.password | .[]' <<< "$payload")
             ;;
-        (*)
+        *)
             echo "Invalid input for .source.password"
             exit 1
             ;;
@@ -98,13 +98,13 @@ fi
 
 if [ "$(jq -r '.source | has("fingerprint")' <<< "$payload")" = 'true' ]; then
     case "$(jq -r '.source.fingerprint | type' <<< "$payload")" in
-        ('string')
+        'string')
             fingerprint=("$(jq -r .source.fingerprint <<< "$payload")")
             ;;
-        ('array')
+        'array')
             mapfile -t fingerprint < <(jq -r '.source.fingerprint | .[]' <<< "$payload")
             ;;
-        (*)
+        *)
             echo "Invalid input for .source.fingerprint"
             exit 1
             ;;
@@ -115,13 +115,13 @@ fi
 
 if [ "$(jq -r '.source | has("packages")' <<< "$payload")" = 'true' ]; then
     case "$(jq -r '.source.packages | type' <<< "$payload")" in
-        ('string')
+        'string')
             packages=("$(jq -r '.source.packages' <<< "$payload")")
             ;;
-        ('array')
+        'array')
             mapfile -t packages < <(jq -r '.source.packages|.[]' <<< "$payload" | sort)
             ;;
-        (*)
+        *)
             echo "Invalid input for .source.packages"
             exit 1
             ;;
@@ -143,7 +143,7 @@ if [ -n "$arch" ]; then
 fi
 
 case "$distro" in
-    ('ubuntu')
+    'ubuntu')
         cat > "$APTDIR"/etc/apt/sources.list <<ENDLINE
 deb $mirror $codename main restricted universe multiverse
 deb $mirror $codename-updates main restricted universe multiverse
@@ -153,23 +153,23 @@ ENDLINE
             echo "deb $mirror $codename-proposed main restricted universe multiverse" >> "$APTDIR"/etc/apt/sources.list
         fi
         ;;
-    ('debian')
+    'debian')
         cat > "$APTDIR"/etc/apt/sources.list <<ENDLINE
 deb $mirror $codename main contrib non-free
 deb $mirror $codename-updates main contrib non-free
 deb $mirror $codename-backports main contrib non-free
 ENDLINE
         ;;
-    (*)
+    *)
         touch "$APTDIR"/etc/apt/sources.list
         ;;
 esac
 
 case "$distro" in
-    ('ubuntu')
+    'ubuntu')
         cp /etc/apt/trusted.gpg.d/ubuntu-keyring-*-archive.gpg "$APTDIR/etc/apt/trusted.gpg.d"
         ;;
-    ('debian')
+    'debian')
         cp /usr/share/keyrings/debian-archive-*.gpg /etc/apt/trusted.gpg.d
         cp /usr/share/keyrings/debian-archive-*.gpg "$APTDIR/etc/apt/trusted.gpg.d"
         ;;
@@ -256,10 +256,10 @@ fi
 digest="sha256:$(echo "${packages[@]}" "${versions[@]}" "${sha256[@]}" | sha256sum | awk '{print $1}')"
 
 case "$0" in
-    ('/opt/resource/check')
+    '/opt/resource/check')
         json='[{"digest":"'"$digest"'"}]'
         ;;
-    ('/opt/resource/in')
+    '/opt/resource/in')
         json='{"version":{"digest":"'"$digest"'"},"metadata":['
         metadata=()
         for idx in "${!packages[@]}"; do
@@ -282,7 +282,7 @@ case "$0" in
         IFS=,
         json+="${metadata[*]}"']}'
         ;;
-    ('/opt/resource/out')
+    '/opt/resource/out')
         # Noop
         json='{}'
         ;;
