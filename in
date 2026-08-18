@@ -16,14 +16,24 @@ exec 1>&2
 
 payload="$(cat <&0)"
 
-codename="$(jq -r '.source.codename // ""' <<< "$payload")"
+mapfile -t vars < <(jq -r '.source.codename // "", .source.arch // ""' <<< "$payload")
+codename="${vars[0]}"
+arch="${vars[1]}"
 
 if [ -z "$codename" ]; then
     distro=''
     mirror=''
 elif command -v ubuntu-distro-info >/dev/null && [[ "$(ubuntu-distro-info --all)" =~ $codename ]]; then
     distro='ubuntu'
-    mirror='http://archive.ubuntu.com/ubuntu/'
+    # Select mirror based on architecture
+    case "$arch" in
+        (amd64|amd64v3|i386|'')
+            mirror='http://archive.ubuntu.com/ubuntu/'
+            ;;
+        (*)
+            mirror='http://ports.ubuntu.com/ubuntu-ports/'
+            ;;
+    esac
 elif command -v debian-distro-info >/dev/null && [[ "$(debian-distro-info --all)" =~ $codename ]]; then
     distro='debian'
     mirror='http://deb.debian.org/debian/'
@@ -125,7 +135,6 @@ download="$(jq -r '.source.download // "false"' <<< "$payload")"
 allow_not_found="$(jq -r '.source.allow_not_found // "false"' <<< "$payload")"
 if_any_found="$(jq -r '.source.if_any_found // "false"' <<< "$payload")"
 proposed="$(jq -r '.source.proposed // "false"' <<< "$payload")"
-arch="$(jq -r '.source.arch // ""' <<< "$payload")"
 
 mkdir -p "$APTDIR"/var/lib/apt/lists "$APTDIR"/var/lib/dpkg "$APTDIR"/etc/apt/trusted.gpg.d "$APTDIR"/etc/apt/preferences.d "$APTDIR"/var/lib/dpkg "$APTDIR"/etc/apt/sources.list.d "$APTDIR"/etc/apt/auth.conf.d
 :> "$APTDIR"/var/lib/dpkg/status
