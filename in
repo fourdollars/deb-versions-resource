@@ -135,12 +135,20 @@ download="$(jq -r '.source.download // "false"' <<< "$payload")"
 allow_not_found="$(jq -r '.source.allow_not_found // "false"' <<< "$payload")"
 if_any_found="$(jq -r '.source.if_any_found // "false"' <<< "$payload")"
 proposed="$(jq -r '.source.proposed // "false"' <<< "$payload")"
+http_proxy_url="$(jq -r '.source.http_proxy // ""' <<< "$payload")"
+https_proxy_url="$(jq -r '.source.https_proxy // .source.http_proxy // ""' <<< "$payload")"
 
 mkdir -p "$APTDIR"/var/lib/apt/lists "$APTDIR"/var/lib/dpkg "$APTDIR"/etc/apt/trusted.gpg.d "$APTDIR"/etc/apt/preferences.d "$APTDIR"/var/lib/dpkg "$APTDIR"/etc/apt/sources.list.d "$APTDIR"/etc/apt/auth.conf.d
 :> "$APTDIR"/var/lib/dpkg/status
 APTOPT=(-o "Dir=$APTDIR" -o "Dir::State::status=$APTDIR/var/lib/dpkg/status")
 if [ -n "$arch" ]; then
     APTOPT+=(-o "APT::Architecture=$arch")
+fi
+if [ -n "$http_proxy_url" ]; then
+    APTOPT+=(-o "Acquire::http::Proxy=$http_proxy_url")
+fi
+if [ -n "$https_proxy_url" ]; then
+    APTOPT+=(-o "Acquire::https::Proxy=$https_proxy_url")
 fi
 
 case "$distro" in
@@ -177,11 +185,15 @@ case "$distro" in
 esac
 
 export APT_KEY_DONT_WARN_ON_DANGEROUS_USAGE=1
+KEYOPT=()
+if [ -n "$http_proxy_url" ]; then
+    KEYOPT=(--keyserver-options "http-proxy=$http_proxy_url")
+fi
 for key in "${fingerprint[@]}"; do
     if [ -f "$APTDIR/etc/apt/trusted.gpg.d/$key.gpg" ]; then
         continue
     fi
-    apt-key adv --keyserver keyserver.ubuntu.com --recv-key "$key" >/dev/null
+    apt-key adv "${KEYOPT[@]}" --keyserver keyserver.ubuntu.com --recv-key "$key" >/dev/null
     apt-key adv --output "$APTDIR/etc/apt/trusted.gpg.d/$key.gpg" --export "$key" >/dev/null
 done
 

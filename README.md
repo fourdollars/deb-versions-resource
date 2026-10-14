@@ -35,6 +35,8 @@ resource_types:
 * fingerprint: optional, the finerprint of the PPA.
 * username: optional, the username of the private PPA.
 * password: optional, the password of the private PPA.
+* http_proxy: optional, HTTP proxy URL used by apt and the keyserver lookup.
+* https_proxy: optional, proxy URL for HTTPS archives, same as http_proxy by default.
 * packages: **required**, the Debian binary packages.
 * download: optional, false by default.
 * allow_not_found: optional, false by default, allow any package not found
