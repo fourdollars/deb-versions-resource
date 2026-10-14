@@ -30,6 +30,7 @@ resource_types:
 
 * mirror: optional, http://archive.ubuntu.com/ubuntu/ by default.
 * codename: optional, if you want to use the general archives of Debian or Ubuntu.
+* arch: optional, target architecture (e.g., amd64, arm64, armhf). If not specified, uses the host architecture.
 * archive: optional, the line of source list or ppa:YourName/YourPPA for Ubuntu.
 * fingerprint: optional, the finerprint of the PPA.
 * username: optional, the username of the private PPA.
